@@ -1,21 +1,25 @@
 import os
 import re
+from sentence_transformers import SentenceTransformer
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_core.documents import Document
+from openai import OpenAI
 
 # --- CONFIGURATION ---
 path = "corpus/arc_pain"
 taille_chunk = 800
-mon_corpus = {}
-chunks_propres = []
+OPENROUTER_API_KEY = "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"
 
 # --- FONCTION DE NETTOYAGE ---
 def nettoyer_texte(texte):
-    # Enlever les codes HTML comme &#44;
     texte = re.sub(r'&#\d+;', '', texte)
-    # Enlever les balises bizarre et les sauts de ligne en trop
     texte = re.sub(r'\s+', ' ', texte)
     return texte.strip()
 
+# --- 1. INGESTION ---
 print("--- 1. Ingestion ---")
+mon_corpus = {}
 if os.path.exists(path):
     for filename in os.listdir(path):
         if filename.endswith(".txt"):
@@ -24,74 +28,60 @@ if os.path.exists(path):
     print(f"Chargé : {len(mon_corpus)} documents.")
 else:
     print("Erreur : Dossier introuvable.")
+    exit()
 
+# --- 2. CHUNKING & NETTOYAGE ---
 print("\n--- 2. Chunking & Nettoyage ---")
+chunks_propres = []
 for nom_fichier, texte in mon_corpus.items():
-    # On nettoie le texte AVANT de le découper
     texte_propre = nettoyer_texte(texte)
-    
     for i in range(0, len(texte_propre), taille_chunk):
-        morceau = texte_propre[i : i + taille_chunk]
-        chunks_propres.append(morceau)
+        chunks_propres.append(texte_propre[i : i + taille_chunk])
+print(f"Total : {len(chunks_propres)} chunks créés.")
 
-print(f"Total : {len(chunks_propres)} chunks propres créés.")
-
-# --- VERIFICATION ---
-if chunks_propres:
-    print("\nExemple du premier chunk propre :")
-    print(chunks_propres[0][:300] + "...")
-
-from sentence_transformers import SentenceTransformer
-
-print("\n--- 3. Vectorisation (Embeddings) ---")
-
-# Chargement du modèle mentionné dans ton TP
-model = SentenceTransformer('all-MiniLM-L6-v2')
-
-# On transforme nos chunks propres en vecteurs (embeddings)
-# Cette étape peut prendre quelques secondes selon ton ordi
-embeddings = model.encode(chunks_propres)
-
-print(f"Vectorisation terminée !")
-print(f"Nombre de vecteurs créés : {len(embeddings)}")
-print(f"Dimension de chaque vecteur : {len(embeddings[0])}") # Doit être 384
-
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_core.documents import Document
-
-print("\n--- 4. Création de la Base Vectorielle (FAISS) ---")
-
-# 1. On configure le modèle d'embedding (le même que tout à l'heure)
+# --- 3. VECTORISATION & BASE FAISS ---
+print("\n--- 3. Préparation de la base de connaissances (IA) ---")
 embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-
-# 2. On transforme tes textes en objets "Document" que LangChain comprend
 documents_langchain = [Document(page_content=t) for t in chunks_propres]
-
-# 3. On crée la base de données FAISS
 vectorstore = FAISS.from_documents(documents_langchain, embedding_model)
+print("Base de données prête !")
 
-print("Base de données vectorielle prête !")
+# --- 4. CONFIGURATION DU CLIENT IA ---
+client = OpenAI(
+  base_url="https://openrouter.ai/api/v1",
+  api_key=OPENROUTER_API_KEY,
+)
 
-# On peut même la sauvegarder pour ne pas avoir à tout refaire demain !
-vectorstore.save_local("faiss_index_naruto")
-print("Index sauvegardé dans le dossier 'faiss_index_naruto'")
+# --- BOUCLE DE TEST INTERACTIVE ---
+print("\n" + "="*50)
+print("BIENVENUE CHEZ L'EXPERT NARUTO (ARC PAIN)")
+print("Pose tes questions ! Tape 'quitter' pour arrêter.")
+print("="*50)
 
-print("\n--- II) Retrieval - Recherche d'information ---")
+while True:
+    query = input("\nTa question : ")
+    
+    if query.lower() in ['quitter', 'exit', 'quit']:
+        print("Fermeture du programme...")
+        break
 
-# On définit une question
-query = "Quels sont les pouvoirs du Rinnegan de Pain ?"
+    # 1. Retrieval 
+    resultats = vectorstore.similarity_search(query, k=5)
+    contexte_extraits = "\n\n".join([doc.page_content for doc in resultats])
 
-# 1 & 2. Vectorisation de la question et recherche des vecteurs proches
-# On demande les 3 meilleurs morceaux (k=3)
-k = 3
-resultats = vectorstore.similarity_search(query, k=k)
-
-print(f"\nQuestion posée : {query}")
-print("-" * 50)
-
-# 3. Récupérer et afficher les K meilleurs chunks
-for i, doc in enumerate(resultats):
-    print(f"\nSource n°{i+1} :")
-    print(doc.page_content[:400] + "...") # On affiche un extrait
-    print("-" * 20)
+    # 2. Generation (Appel au LLM)
+    try:
+        response = client.chat.completions.create(
+          model="google/gemini-2.0-flash-001",
+          messages=[
+            {"role": "system", "content": "Tu es un expert de l'arc Pain dans Naruto. Réponds en markdown de façon concise en te basant sur les extraits fournis.Si l'information est partiellement présente, utilise tes connaissances pour lier les points logiquement,tout en restant fidèle à l'esprit des documents."},
+            {"role": "user", "content": f"Extraits du wiki :\n{contexte_extraits}\n\nQuestion : {query}"}
+          ]
+        )
+        
+        print("\n--- RÉPONSE DE L'EXPERT ---")
+        print(response.choices[0].message.content)
+        print("-" * 30)
+        
+    except Exception as e:
+        print(f"Erreur lors de l'appel à l'IA : {e}")
