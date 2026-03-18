@@ -76,3 +76,22 @@ print("Base de données vectorielle prête !")
 # On peut même la sauvegarder pour ne pas avoir à tout refaire demain !
 vectorstore.save_local("faiss_index_naruto")
 print("Index sauvegardé dans le dossier 'faiss_index_naruto'")
+
+print("\n--- II) Retrieval - Recherche d'information ---")
+
+# On définit une question
+query = "Quels sont les pouvoirs du Rinnegan de Pain ?"
+
+# 1 & 2. Vectorisation de la question et recherche des vecteurs proches
+# On demande les 3 meilleurs morceaux (k=3)
+k = 3
+resultats = vectorstore.similarity_search(query, k=k)
+
+print(f"\nQuestion posée : {query}")
+print("-" * 50)
+
+# 3. Récupérer et afficher les K meilleurs chunks
+for i, doc in enumerate(resultats):
+    print(f"\nSource n°{i+1} :")
+    print(doc.page_content[:400] + "...") # On affiche un extrait
+    print("-" * 20)
