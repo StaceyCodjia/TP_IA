@@ -5,7 +5,7 @@ import re
 path = "corpus/arc_pain"
 taille_chunk = 800
 mon_corpus = {}
-chunks_naruto = []
+chunks_propres = []
 
 # --- FONCTION DE NETTOYAGE ---
 def nettoyer_texte(texte):
@@ -32,11 +32,26 @@ for nom_fichier, texte in mon_corpus.items():
     
     for i in range(0, len(texte_propre), taille_chunk):
         morceau = texte_propre[i : i + taille_chunk]
-        chunks_naruto.append(morceau)
+        chunks_propres.append(morceau)
 
-print(f"Total : {len(chunks_naruto)} chunks propres créés.")
+print(f"Total : {len(chunks_propres)} chunks propres créés.")
 
 # --- VERIFICATION ---
-if chunks_naruto:
+if chunks_propres:
     print("\nExemple du premier chunk propre :")
-    print(chunks_naruto[0][:300] + "...")
+    print(chunks_propres[0][:300] + "...")
+
+from sentence_transformers import SentenceTransformer
+
+print("\n--- 3. Vectorisation (Embeddings) ---")
+
+# Chargement du modèle mentionné dans ton TP
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# On transforme nos chunks propres en vecteurs (embeddings)
+# Cette étape peut prendre quelques secondes selon ton ordi
+embeddings = model.encode(chunks_propres)
+
+print(f"Vectorisation terminée !")
+print(f"Nombre de vecteurs créés : {len(embeddings)}")
+print(f"Dimension de chaque vecteur : {len(embeddings[0])}") # Doit être 384
