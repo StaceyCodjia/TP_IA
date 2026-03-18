@@ -55,3 +55,24 @@ embeddings = model.encode(chunks_propres)
 print(f"Vectorisation terminée !")
 print(f"Nombre de vecteurs créés : {len(embeddings)}")
 print(f"Dimension de chaque vecteur : {len(embeddings[0])}") # Doit être 384
+
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_core.documents import Document
+
+print("\n--- 4. Création de la Base Vectorielle (FAISS) ---")
+
+# 1. On configure le modèle d'embedding (le même que tout à l'heure)
+embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
+# 2. On transforme tes textes en objets "Document" que LangChain comprend
+documents_langchain = [Document(page_content=t) for t in chunks_propres]
+
+# 3. On crée la base de données FAISS
+vectorstore = FAISS.from_documents(documents_langchain, embedding_model)
+
+print("Base de données vectorielle prête !")
+
+# On peut même la sauvegarder pour ne pas avoir à tout refaire demain !
+vectorstore.save_local("faiss_index_naruto")
+print("Index sauvegardé dans le dossier 'faiss_index_naruto'")
