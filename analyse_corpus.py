@@ -1,26 +1,42 @@
 import os
+import re
 
-# Chemin vers mes données Naruto
+# --- CONFIGURATION ---
 path = "corpus/arc_pain"
+taille_chunk = 800
 mon_corpus = {}
+chunks_naruto = []
 
-print("--- Début de l'ingestion ---")
+# --- FONCTION DE NETTOYAGE ---
+def nettoyer_texte(texte):
+    # Enlever les codes HTML comme &#44;
+    texte = re.sub(r'&#\d+;', '', texte)
+    # Enlever les balises bizarre et les sauts de ligne en trop
+    texte = re.sub(r'\s+', ' ', texte)
+    return texte.strip()
 
-# On vérifie si le dossier existe pour éviter un crash
+print("--- 1. Ingestion ---")
 if os.path.exists(path):
     for filename in os.listdir(path):
         if filename.endswith(".txt"):
             with open(os.path.join(path, filename), 'r', encoding='utf-8') as f:
-                # On stocke dans un dictionnaire : {Nom du fichier : Texte}
-                texte = f.read()
-                mon_corpus[filename] = texte
-                print(f"Chargé : {filename} ({len(texte)} caractères)")
+                mon_corpus[filename] = f.read()
+    print(f"Chargé : {len(mon_corpus)} documents.")
 else:
-    print(f"Erreur : Le dossier {path} est introuvable !")
+    print("Erreur : Dossier introuvable.")
 
-print(f"--- Fin de l'ingestion : {len(mon_corpus)} documents en mémoire ---")
+print("\n--- 2. Chunking & Nettoyage ---")
+for nom_fichier, texte in mon_corpus.items():
+    # On nettoie le texte AVANT de le découper
+    texte_propre = nettoyer_texte(texte)
+    
+    for i in range(0, len(texte_propre), taille_chunk):
+        morceau = texte_propre[i : i + taille_chunk]
+        chunks_naruto.append(morceau)
 
-# Exemple : Afficher un petit bout du premier document pour tester
-if mon_corpus:
-    premier_fichier = list(mon_corpus.keys())[0]
-    print(f"\nExtrait de {premier_fichier} :\n{mon_corpus[premier_fichier][:200]}...")
+print(f"Total : {len(chunks_naruto)} chunks propres créés.")
+
+# --- VERIFICATION ---
+if chunks_naruto:
+    print("\nExemple du premier chunk propre :")
+    print(chunks_naruto[0][:300] + "...")
